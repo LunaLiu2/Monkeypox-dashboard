@@ -1,0 +1,106 @@
+-- Table: public.cases
+
+-- Datasets provided by Deep Contractor on Kaggle
+-- Datasets analysed by Luna Liu
+
+-- 0. Setup
+-- 0.1 Creating cases table
+
+DROP TABLE IF EXISTS public.cases CASCADE;
+
+CREATE TABLE IF NOT EXISTS public.cases
+(
+    country character varying NOT NULL,
+    confirmed numeric,
+    suspected numeric,
+    hospitalized numeric,
+    travel_yes numeric,
+    travel_no numeric,
+    CONSTRAINT cases_pkey PRIMARY KEY (country)
+)
+
+TABLESPACE pg_default;
+
+COMMENT ON TABLE public.cases
+    IS 'Cases by country';
+
+-- 0.2 Importing the cases data
+
+COPY cases FROM
+'Monkey_Pox_Cases_Worldwide.csv'
+CSV HEADER;
+
+-- 0.3 Creating the timeline table
+
+DROP TABLE IF EXISTS public.timeline CASCADE;
+
+CREATE TABLE IF NOT EXISTS public.timeline
+(
+    date date,
+    country character varying,
+    city character varying,
+    age character varying,
+    gender character varying,
+    symptoms character varying,
+    hospitalisation character varying,
+    isolation character varying,
+    travel character varying
+)
+
+TABLESPACE pg_default;
+
+COMMENT ON TABLE public.timeline
+    IS 'Timeline of cases';
+
+-- 0.4 Importing the timeline data
+
+COPY timeline FROM
+'Worldwide_Case_Detection_Timeline.csv'
+CSV HEADER;
+
+-- 1. Creating Cases Views
+
+-- 1.1 Country cases percentages
+
+-- DROP VIEW country_percentages
+
+CREATE VIEW country_percentages AS
+SELECT country,
+    hospitalized::integer,
+    confirmed::integer,
+    suspected::integer,
+    CASE
+        WHEN confirmed = 0 THEN 0
+        ELSE (hospitalized/confirmed) * 100
+    END AS hospitalized_percentage,
+    CASE
+        WHEN confirmed = 0 THEN 0
+        ELSE (travel_yes/confirmed) * 100
+    END AS travel_yes_percentage,
+    CASE
+        WHEN confirmed = 0 THEN 0
+        ELSE (travel_no/confirmed) * 100
+    END AS travel_no_percentage
+FROM cases;
+
+-- 2. Creating Timeline Views
+
+-- 2.1 Cumulative Cases by country over time
+
+-- DROP VIEW cumulative_cases
+
+CREATE VIEW cumulative_cases AS
+SELECT
+    country,
+    date,
+    current_day,
+    SUM(current_day) OVER(PARTITION BY country ORDER BY date) AS cumulative_count
+FROM (
+    SELECT 
+        country,
+        date,
+        COUNT(*) AS current_day
+    FROM timeline
+    GROUP BY country, date
+) AS all_dates
+ORDER BY country, date;
